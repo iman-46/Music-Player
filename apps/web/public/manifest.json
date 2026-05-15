@@ -1,0 +1,21 @@
+{
+  "name": "Iman's Music",
+  "short_name": "Iman's",
+  "description": "Spotify-inspired music streaming app powered by official YouTube APIs.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0d0b",
+  "theme_color": "#0a0d0b",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
