@@ -66,19 +66,38 @@ export function SearchView() {
       </PageHeader>
 
       <div className="glass rounded-lg p-3">
-        {results.isError && (
+        {/* Only show the error banner when a real API call fails */}
+        {results.isError && query.length > 0 && (
           <p className="mb-3 rounded-md bg-yellow-500/10 p-3 text-sm text-yellow-100">
-            API search is unavailable, showing starter tracks.
+            Search is temporarily unavailable — showing matching starter tracks instead.
           </p>
         )}
-        {tracks.map((track, index) => (
-          <TrackRow
-            key={`${track.id}-${index}`}
-            index={index + 1}
-            track={track}
-            onPlay={() => handlePlayFromSearch(track)}
-          />
-        ))}
+
+        {/* Empty state before the user has typed anything */}
+        {!query && (
+          <p className="py-6 text-center text-sm text-muted">
+            Start typing to search for songs, artists, or albums.
+          </p>
+        )}
+
+        {/* Track list */}
+        {query &&
+          tracks.map((track, index) => (
+            <TrackRow
+              key={`${track.id}-${index}`}
+              index={index + 1}
+              track={track}
+              onPlay={() => handlePlayFromSearch(track)}
+            />
+          ))}
+
+        {/* No results */}
+        {query && !results.isLoading && tracks.length === 0 && (
+          <p className="py-6 text-center text-sm text-muted">
+            No results for &ldquo;{query}&rdquo;.
+          </p>
+        )}
+
         {results.hasNextPage && (
           <button
             className="mt-4 w-full rounded-full bg-white/10 px-4 py-3 font-bold transition hover:bg-white/15"

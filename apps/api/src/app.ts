@@ -16,7 +16,22 @@ export function createApp() {
   const app = express();
 
   app.use(helmet());
-  app.use(cors({ credentials: true, origin: env.CLIENT_ORIGIN }));
+  app.use(
+    cors({
+      credentials: true,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (e.g. curl, mobile apps)
+        if (!origin) return callback(null, true);
+        // In development, allow any localhost port
+        if (env.NODE_ENV !== "production" && /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+          return callback(null, true);
+        }
+        // In production, only allow the configured origin
+        if (origin === env.CLIENT_ORIGIN) return callback(null, true);
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      },
+    }),
+  );
   app.use(express.json({ limit: "1mb" }));
   app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
   app.use(rateLimit({ limit: 400, standardHeaders: true, windowMs: 60_000 }));

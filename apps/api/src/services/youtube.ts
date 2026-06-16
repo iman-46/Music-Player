@@ -5,7 +5,6 @@ import type {
   Track,
 } from "@aurora/shared";
 import { env } from "../config/env.js";
-import { HttpError } from "../utils/http.js";
 
 const demoTracks: Track[] = [
   {
@@ -113,8 +112,10 @@ export async function searchYouTubeMusic(
   query: string,
   pageToken?: string,
 ): Promise<SearchResponse> {
+  const normalized = query.toLowerCase();
+
+  // No API key — filter demo tracks locally
   if (!env.YOUTUBE_API_KEY) {
-    const normalized = query.toLowerCase();
     const tracks = demoTracks.filter((track) =>
       [track.title, track.artist, ...(track.genres ?? [])]
         .join(" ")
@@ -124,46 +125,62 @@ export async function searchYouTubeMusic(
     return buildSearchResponse(query, tracks.length ? tracks : demoTracks);
   }
 
-  const params = new URLSearchParams({
-    key: env.YOUTUBE_API_KEY,
-    maxResults: "20",
-    part: "snippet",
-    q: `${query} music`,
-    type: "video",
-    videoCategoryId: "10",
-    videoEmbeddable: "true",
-    videoSyndicated: "true",
-  });
-  if (pageToken) params.set("pageToken", pageToken);
+  try {
+    const params = new URLSearchParams({
+      key: env.YOUTUBE_API_KEY,
+      maxResults: "20",
+      part: "snippet",
+      q: `${query} music`,
+      type: "video",
+      videoCategoryId: "10",
+      videoEmbeddable: "true",
+      videoSyndicated: "true",
+    });
+    if (pageToken) params.set("pageToken", pageToken);
 
-  const response = await fetch(
-    `https://www.googleapis.com/youtube/v3/search?${params}`,
-  );
-  if (!response.ok) {
-    throw new HttpError(502, "YouTube search failed", await response.text());
+    const response = await fetch(
+      `https://www.googleapis.com/youtube/v3/search?${params}`,
+    );
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error(`[YouTube] search failed (${response.status}): ${errBody}`);
+      // Fall through to demo fallback below
+      throw new Error(`YouTube API ${response.status}`);
+    }
+
+    const data = (await response.json()) as YouTubeSearchResult;
+    const tracks = data.items.map((item) => ({
+      id: `yt-${item.id.videoId}`,
+      youtubeId: item.id.videoId,
+      title: stripOfficialVideoSuffix(item.snippet.title),
+      artist: item.snippet.channelTitle,
+      artists: [
+        { id: slug(item.snippet.channelTitle), name: item.snippet.channelTitle },
+      ],
+      artwork:
+        item.snippet.thumbnails.maxres?.url ??
+        item.snippet.thumbnails.high?.url ??
+        item.snippet.thumbnails.medium?.url,
+      sourceUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+      genres: ["music"],
+    }));
+
+    return {
+      ...buildSearchResponse(query, tracks),
+      nextPageToken: data.nextPageToken,
+    };
+  } catch (err) {
+    // Graceful fallback: return demo tracks filtered by query
+    console.error("[YouTube] Falling back to demo tracks:", err);
+    const tracks = demoTracks.filter((track) =>
+      [track.title, track.artist, ...(track.genres ?? [])]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalized),
+    );
+    return buildSearchResponse(query, tracks.length ? tracks : demoTracks);
   }
-
-  const data = (await response.json()) as YouTubeSearchResult;
-  const tracks = data.items.map((item) => ({
-    id: `yt-${item.id.videoId}`,
-    youtubeId: item.id.videoId,
-    title: stripOfficialVideoSuffix(item.snippet.title),
-    artist: item.snippet.channelTitle,
-    artists: [
-      { id: slug(item.snippet.channelTitle), name: item.snippet.channelTitle },
-    ],
-    artwork:
-      item.snippet.thumbnails.maxres?.url ??
-      item.snippet.thumbnails.high?.url ??
-      item.snippet.thumbnails.medium?.url,
-    sourceUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`,
-    genres: ["music"],
-  }));
-
-  return {
-    ...buildSearchResponse(query, tracks),
-    nextPageToken: data.nextPageToken,
-  };
 }
 
 export async function getTrendingTracks() {
